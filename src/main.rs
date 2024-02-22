@@ -84,6 +84,13 @@ fn main() -> Result<()> {
             }
         }
 
+        {
+            // Save the entire sp state to redis.
+            let jv = lua_table_to_json(lua.globals());
+            let json = serde_json::to_string_pretty(&jv).map_err(Error::external)?;
+            let _r: std::result::Result<(), _> = rc.set("sp/all", json);
+        }
+
         std::thread::sleep(std::time::Duration::from_millis(100));
    }
 }
@@ -221,6 +228,48 @@ pub fn load_and_run(lua: &Lua, filename: &str) -> Result<()> {
     let mut s = String::new();
     input.read_to_string(&mut s)?;
     lua.load(s).exec()
+}
+
+pub fn lua_table_to_json<'lua>(t: Table<'lua>) -> serde_json::Value {
+    fn is_serializable(v: &Value) -> bool {
+        match v {
+            Value::Nil => true,
+            Value::Boolean(_) => true,
+            Value::Integer(_) => true,
+            Value::Number(_) => true,
+            Value::String(_) => true,
+            _ => false,
+        }
+    }
+
+    fn inner<'lua>(table: Table<'lua>, seen: &mut Vec<(Table<'lua>, serde_json::Value)>) ->
+        serde_json::Value {
+        let mut map = serde_json::Map::new();
+        for pair in table.clone().pairs::<String, Value>() {
+            match pair {
+                Ok((s, Value::Table(t))) if t != table => {
+                    let tabval = if let Some(existing) = seen.iter().
+                        find(|(tt, _)| *tt == t).map(|(_, existing)| existing) {
+                            existing.clone()
+                        } else {
+                            let new = inner(t.clone(), seen);
+                            seen.push((t, new.clone()));
+                            new
+                        };
+                    map.insert(s, tabval);
+                },
+                Ok((s, t)) if is_serializable(&t) => {
+                    let pod: serde_json::Value = serde_json::to_value(t).unwrap_or(serde_json::Value::Null);
+                    map.insert(s, pod);
+                },
+                _ => {}
+            }
+        }
+        return serde_json::Value::Object(map)
+    }
+
+    let mut seen = vec![];
+    inner(t, &mut seen)
 }
 
 

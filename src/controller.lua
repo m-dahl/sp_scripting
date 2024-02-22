@@ -1,6 +1,6 @@
 -- some random definitions we need
 function table_invert(t)
-   s={}
+   local s={}
    for k,v in pairs(t) do
      s[v]=k
    end

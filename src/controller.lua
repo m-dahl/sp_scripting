@@ -1,12 +1,3 @@
--- some random definitions we need
-function table_invert(t)
-   local s={}
-   for k,v in pairs(t) do
-     s[v]=k
-   end
-   return s
-end
-
 -- redefines some agv positions from ARIAC to axelline
 -- (just to avoid rewriting control logic)
 location_to_name = {
@@ -200,5 +191,5 @@ function axelline_coordinator()
    end
 end
 
-
+-- adds this function to the sp ticker.
 sp.add_function("axelline_coordinator", axelline_coordinator)
